@@ -1,27 +1,22 @@
-# Non-fungible token
+﻿STXMAP-V2 
+a core enhancement to stxmap bridge
 
-Non-fungible tokens or NFTs are digital assets registered on a blockchain with unique identifiers and properties that distinguish them from each other.
+The stxmap-v2 contract is a sophisticated solution designed to bridge original stx20 inscriptions into NFTs that comply with the SIP-09 standard. These inscriptions, also known as stxmaps, are graphical representations of already mined blocks on the blockchain, akin to Bitcoin bitmaps. The core functionality of the contract enables the secure transfer of these stxmaps to the smart contract, where, after successful transfer verification, an automated airdrop system mints and delivers the corresponding wrapped stxmaps (wstxmaps), the NFT equivalents of the original inscriptions, to the initiating user.
 
-This contract example implements a basic NFT collection that conforms to the SIP-009 NFT standard. Be sure to change the placeholder name of the collection and its max supply.
+This bridging process not only facilitates the conversion of stx20 inscriptions into verifiable on-chain assets but also simplifies ownership management. The use of NFTs enables full on-chain verification, enhancing consensus mechanisms and making asset handling more efficient.
 
-## SIP-009 Standard Trait Definition for Non-Fungible Tokens
+Key Enhancements in STXMAP-V2:
 
-In [Stacks Improvement Proposal 009 (SIP-009)](https://github.com/stacksgov/sips/blob/main/sips/sip-009/sip-009-nft-standard.md), the Stacks community proposed and approved a standard set of functions that every NFT contract is to implement to qualify as a compliant Stacks NFT. This creates uniformity and predictability in contract interactions, as well as enables a handful of built-in Clarity functions accessible only to SIP-009 contracts (such as `nft-transfer?`, etc.)
+    1. On-chain Storage for Increased Security: In the new stxmap-v2, inscriptions are now securely stored directly within the contract, replacing the previous approach where they were held in a dedicated wallet. This upgrade takes full advantage of the latest stx20 protocol advancements, which allow the transfer of inscriptions between smart contracts. However, minting inscriptions through contracts is still not permitted, preserving the integrity of the original protocol. By incorporating on-chain storage, the contract significantly increases the security and decentralization of the inscription management process, though it’s important to note that the stx20 indexer remains off-chain, meaning that ownership verification still cannot be achieved entirely within Clarity.
+       
+    2. Bulk Action Support for Marketplace Integration: This version introduces enhanced marketplace functionalities with bulk action capabilities, allowing users to efficiently manage multiple NFTs through listing, unlisting, buying, and transferring actions in a single operation. These bulk actions simplify asset management for users, offering a smoother and more streamlined experience when interacting with the marketplace.
+       
+    3. Nakamoto Block - A Unique and Exclusive stxmap: The final and most exclusive addition to stxmap-v2 is the Nakamoto Block, a one-of-a-kind stxmap representing the block where the Stacks hard fork will occur. According to the stx20 protocol, minting of stxmaps will cease with the activation of the Nakamoto upgrade, and the first block of Epoch 3.0 will not be minted under the original protocol.
 
-Those functions are specified in the SIP and must be implemented in each contract. Trait conformance is then asserted with an `impl-trait` declaration at the top of the contract pointing to the relevant trait reference published on the Stacks mainnet.
+To manage this transition, a specialized freeze function has been introduced. Once the core developers designate the activation block, the total supply of stxmaps will be permanently locked, preventing any further modifications. The final block to be minted, known as the Nakamoto Block, will be the last of its kind and will only exist as an NFT. This unique stxmap will hold significant value due to its exclusivity and its association with the Stacks hard fork event.
 
-You can see this [`nft-trait` reference in the Hiro Stacks Explorer](https://explorer.stacks.co/txid/SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait?chain=mainnet).
+The Nakamoto Block will be distributed through the stx-raffle system, a separate project designed by me. This contract allows for the creation of public raffles with an on-chain proof of randomness generated from Stacks blockchain data, ensuring a fair and tamper-proof selection process. What sets stx-raffle apart is its fair prize distribution mechanism: any user can execute the function to distribute the prize, but they have no ability to alter the winner or the prize itself. This ensures that the process remains transparent and decentralized, providing all participants with equal chances of winning the highly coveted Nakamoto Block NFT.
 
-## Test your contract
+All users who previously bridged to version v1 will automatically receive stxmap-v2 via an airdrop. To simplify the removal of old tokens, a burn for tokens function will be introduced, incentivizing users with rewards in $MAP, the official token of the community. Additionally, the ongoing distribution of 100 $MAP for each bridged stxmap will continue as part of our massive airdrop campaign aimed at rewarding all OG participants.
 
-You can manually test your contract in the Clarinet console. After entering the console with `clarinet console` you can make contract function calls like
-`(contract-call? .nft claim)`
-`(contract-call? .nft get-last-token-id)`
-
-You can programmatically test your contracts with [unit tests](https://docs.hiro.so/clarinet/how-to-guides/how-to-test-contract). See the `tests/` folder where you will find a unit test that ensures the `claim` function returns the proper response and that the read-only functions work as expected.
-
-## Resources and Inspiration
-
-- One of the most successful NFT collections in Stacks is [Megapont Ape Club](https://gamma.io/collections/megapont-ape-club). You can view [the source code of their NFT contract](https://explorer.stacks.co/txid/SP3D6PV2ACBPEKYJTCMH7HEN02KP87QSP8KTEH335.megapont-ape-club-nft?chain=mainnet)
-- The Crash Punks project had an upgrade from v1 to v2, which this [NFT contract implements](https://explorer.stacks.co/txid/SP3QSAJQ4EA8WXEDSRRKMZZ29NH91VZ6C5X88FGZQ.crashpunks-v2?chain=mainnet)
-- An ambitious use case for NFTs is Mechanism.io's BNSx project, where pre-SIP-009 era BNS names can be wrapped into a SIP-009 NFT. You can learn more about the [BNSx project](https://github.com/mechanismHQ/bns-x) and look at the [source code here.](https://github.com/mechanismHQ/bns-x/blob/main/contracts/contracts/core/name-registry.clar)
+In conclusion, stxmap-v2 represents a major advancement in the bridging of stx20 inscriptions into NFTs, with enhanced on-chain security, seamless marketplace integration through bulk actions, and the introduction of the exclusive Nakamoto Block. These upgrades not only ensure a more efficient and decentralized management of inscriptions but also provide users with unique opportunities, such as participating in the stx-raffle for the Nakamoto Block. As stxmap-v2 prepares for listing on Gamma.io, it offers both investors and users a more secure, streamlined, and rewarding experience in the Stacks ecosystem.
