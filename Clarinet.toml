@@ -1,0 +1,29 @@
+[project]
+name = 'non-fungible-token'
+description = 'Demonstrates a basic NFT collection that conforms to the SIP-009 NFT standard'
+authors = []
+telemetry = true
+cache_dir = './.cache'
+
+[[project.requirements]]
+contract_id = 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait'
+
+[[project.requirements]]
+contract_id = 'SP3D6PV2ACBPEKYJTCMH7HEN02KP87QSP8KTEH335.commission-trait'
+
+[[project.requirements]]
+contract_id = 'SP31VDBJZTHC476YXZ428R2NBYF3CWV4QJSKDX0ZK.stxmap'
+
+[contracts.stxmap-v2]
+path = 'contracts/stxmap-v2.clar'
+clarity_version = 2
+epoch = 2.5
+
+[repl.analysis]
+passes = ['check_checker']
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = true
+trusted_caller = false
+callee_filter = false
