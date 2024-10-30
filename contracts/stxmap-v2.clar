@@ -1,23 +1,31 @@
+;;deployed at SM2TEWJ03JQH962GAJ3BQMB00BQ8TPW4MBMV3SFQA.wstxmap
+
 ;; Mainnet trait implementation
  (impl-trait 'SP2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait.nft-trait)
 
-;; Testnet trait implementation
-;; (use-trait nft-trait 'ST30VRDPRK19QWV21JW945ZQK4QYA69TD7F8T2SHH.nft-trait.nft-trait)
+;; Burn functions trait definition
+(define-trait nft-burn-trait
+  (
+    (burn (uint) (response bool uint))
+  )
+)
 
+;; Define the nft name for the wrapped stxmap
 (define-non-fungible-token wstxmap uint)
 
 ;; Constants
 (define-constant DEPLOYER tx-sender)
 
+;; Errors
 (define-constant ERR-NO-MORE-NFTS u100)
 (define-constant ERR-ALREADY-MINTED u101)
 (define-constant ERR-WRONG-MAP u102)
-(define-constant ERR-CONTRACT-INITIALIZED u103)
+(define-constant CONTRACT_METADATA_NOT_ACTIVE u103)
 (define-constant ERR-NOT-AUTHORIZED u104)
 (define-constant ERR-INVALID-USER u105)
 (define-constant ERR-LISTING u106)
 (define-constant ERR-WRONG-COMMISSION u107)
-(define-constant ERR-NOT-FOUND u108)
+(define-constant ERR-NOT-WHITELISTED u108)
 (define-constant ERR-UNWRAP u109)
 (define-constant ERR-MINT-LIMIT u110)
 (define-constant ERR-METADATA-FROZEN u111)
@@ -25,18 +33,19 @@
 (define-constant ERR-NOT-ACTIVE u113)
 (define-constant ERR-NO-MORE-MINTS u114)
 (define-constant ERR-INVALID-PERCENTAGE u115)
+(define-constant ERR-NOT-FOUND u116)
 
 ;; Nakamoto Block will exist only as unique NFT. not possible to bridge back
 (define-constant ERR-NAKAMOTO-BLOCK u200)
 
-;; Internal variables
-(define-data-var mint-limit uint u166166)
-
 ;; last-id is used only to keep track of the total amount of minted nfts
 (define-data-var last-id uint u1)
 
-(define-data-var protocol-address principal tx-sender)
-(define-data-var minter principal tx-sender)
+;; Internal variables
+(define-data-var mint-limit uint u177000)
+
+(define-data-var protocol-address principal 'SP2N7V30GFEQAHMNMMTJ6VJBZEGQ3RKS1M2KCEDX7)
+(define-data-var minter principal 'SP8RKQ9J2QAG31GWS28E6PZP6SQPF701TP226W5H)
 (define-data-var ipfs-root (string-ascii 80) "https://stxmap.co/api/metadata/")
 (define-data-var metadata-frozen bool false)
 (define-data-var supply-frozen bool false)
@@ -46,7 +55,7 @@
 (define-map active-maps uint bool)
 (define-map wrapped-maps uint bool)
 
-(define-public (bridge-many (recipients (list 500 { to: principal, id: uint })))
+(define-public (bridge-many (recipients (list 1000 { to: principal, id: uint })))
   (fold check-err (map bridge-single recipients) (ok true))
 )
 
@@ -61,7 +70,7 @@
   (bridge-map (get id recipient) (get to recipient))
 ))
 
-(define-private (bridge-map (id uint) (to principal) )
+(define-public (bridge-map (id uint) (to principal) )
 
   (let 
   (
@@ -72,8 +81,9 @@
   )
   (print {expr: "mint", current-supply: last-nft-id, token-id: id, recipient: to})
   (begin
-  (asserts! (is-eq tx-sender (var-get minter)) (err ERR-INVALID-USER))
+  (asserts! (is-eq (get-standard-caller) (var-get minter)) (err ERR-INVALID-USER))
   (asserts! (<= id (var-get mint-limit)) (err ERR-MINT-LIMIT))
+  (asserts! (<= id (- block-height u6)) (err ERR-NOT-FOUND))
   (map-set active-maps id true)
   (map-set wrapped-maps id true)
   (map-set token-count to (+ current-balance u1))
@@ -82,22 +92,22 @@
   )
 ))
 
-(define-public (redeem-many (maps (list 500 { id: uint, memo: (buff 34)})))
+(define-public (redeem-many (maps (list 200 { id: uint, memo: (buff 34)})))
   (fold check-err (map redeem-single maps) (ok true))
 )
 
 (define-private (redeem-single (maps { id: uint, memo: (buff 34)}))
-
 (begin
-  (asserts! (is-eq tx-sender (var-get minter))  (err ERR-INVALID-USER))
   (redeem-stx20 (get id maps) (get memo maps))
 ))
 
 ;; redeem function will send the original stx20 inscription to the current nft owner
 (define-public (redeem-stx20 (id uint) (memo (buff 34)))
   (let (
-        (sender tx-sender)
+        (sender (get-standard-caller))
         (contract-vault (as-contract tx-sender))
+        (current-balance (get-balance sender))
+        (vault-balance (get-balance contract-vault))
         ;; function to compare id to memo
         (idstring (int-to-ascii id))
         (idmap (concat idstring ".stxmap"))
@@ -107,15 +117,14 @@
         (memobuff (unwrap! (to-consensus-buff? memo) (err ERR-UNWRAP) ))
         (memolen (len memobuff))
         (memostring (unwrap! (slice? memobuff u1 memolen) (err ERR-UNWRAP) ))
+
       )
     (asserts! (is-eq memostring mapstring) (err ERR-WRONG-MAP))
-    (asserts! (is-owner id tx-sender) (err ERR-NOT-AUTHORIZED))
-    (asserts! (and  
-              (not (is-eq id (var-get mint-limit))) 
-              (is-eq (var-get supply-frozen) true)
-              ) 
-    (err ERR-NAKAMOTO-BLOCK))
+    (asserts! (is-owner id (get-standard-caller)) (err ERR-NOT-AUTHORIZED))
+    (asserts! (not (is-eq id (var-get mint-limit))) (err ERR-NAKAMOTO-BLOCK))
     (map-set active-maps id false)
+    (map-set token-count contract-vault (+ vault-balance u1))
+    (map-set token-count sender (- current-balance u1))
     (try! (stx-transfer? (var-get unwrap-cost) tx-sender (var-get protocol-address)))
     (try! (transfer id sender contract-vault))
     (try! (as-contract (stx-transfer-memo? u1 tx-sender sender memo)))
@@ -123,44 +132,62 @@
     (ok true)))
 
 ;; only the Minter can send the nft to the new owner
+(define-public (unlock-many (recipients (list 200 { to: principal, id: uint })))
+  (fold check-err (map unlock-single recipients) (ok true))
+)
+
+(define-private (unlock-single (recipient { to: principal, id: uint }))
+(begin
+  (unlock-nft (get id recipient) (get to recipient))
+))
+
 (define-public (unlock-nft (id uint) (to principal)) 
-(begin 
-  (asserts! (is-eq (var-get minter) tx-sender) (err u103))
+(let (
+  (current-balance (get-balance to))
+  (vault-balance (get-balance (as-contract tx-sender)))
+) 
+  (asserts! (is-eq (var-get minter) (get-standard-caller)) (err ERR-NOT-AUTHORIZED))
+  (map-set active-maps id true)
+  (map-set token-count (as-contract tx-sender) (- vault-balance u1))
+  (map-set token-count to (+ current-balance u1))
   (try! (as-contract (transfer id tx-sender to)))
   (print {a: "unlock-nft", id: id})
   (ok true)
 ))
 
 (define-public (burn (token-id uint))
-  (begin 
-    (asserts! (is-owner token-id tx-sender) (err ERR-NOT-AUTHORIZED))
+  (let (
+    (sender (get-standard-caller))
+  )
+    (asserts! (is-owner token-id sender) (err ERR-NOT-AUTHORIZED))
     (asserts! (is-eq (is-active token-id) true) (err ERR-NOT-ACTIVE))
     (map-set active-maps token-id false)
+    (map-set token-count sender (- (get-balance sender) u1))
     (if (is-none (map-get? market token-id))
-    (nft-burn? wstxmap token-id tx-sender)
+    (nft-burn? wstxmap token-id sender)
     (begin
     (try! (unlist-in-ustx token-id))
-    (nft-burn? wstxmap token-id tx-sender)
+    (nft-burn? wstxmap token-id sender)
     ))))
 
 (define-public (set-unwrap-cost (price uint))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-INVALID-USER))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-INVALID-USER))
     (ok (var-set unwrap-cost price))))
 
 (define-public (set-minter-address (minter-address principal))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-INVALID-USER))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-INVALID-USER))
     (ok (var-set minter minter-address))))
 
 (define-public (set-protocol-address (address principal))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-INVALID-USER))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-INVALID-USER))
     (ok (var-set protocol-address address))))
 
 (define-public (set-mint-limit (limit uint))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-INVALID-USER))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-INVALID-USER))
     (asserts! (not (var-get supply-frozen)) (err ERR-SUPPLY-FROZEN))
     (ok (var-set mint-limit limit))))
 
@@ -169,7 +196,7 @@
 
 (define-public (set-base-uri (new-base-uri (string-ascii 80)))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-NOT-AUTHORIZED))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-NOT-AUTHORIZED))
     (asserts! (not (var-get metadata-frozen)) (err ERR-METADATA-FROZEN))
     (print { notification: "token-metadata-update", payload: { token-class: "nft", contract-id: (as-contract tx-sender) }})
     (var-set ipfs-root new-base-uri)
@@ -177,7 +204,7 @@
 
 (define-public (freeze-metadata)
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-NOT-AUTHORIZED))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-NOT-AUTHORIZED))
     (var-set metadata-frozen true)
     (ok true)))
 
@@ -185,8 +212,9 @@
 ;; this block will be minted to the DEPLOYER address and publicily raffled on our website
 (define-public (freeze-supply)
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-NOT-AUTHORIZED))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-NOT-AUTHORIZED))
     (var-set supply-frozen true)
+    (map-set token-count DEPLOYER (+ (get-balance DEPLOYER) u1))
     (try! (nft-mint? wstxmap (var-get mint-limit) DEPLOYER))
     (ok true)))
 
@@ -225,6 +253,12 @@
   (default-to false (map-get? active-maps id))
 )
 
+(define-read-only (get-standard-caller)
+  (let ((d (unwrap-panic (principal-destruct? contract-caller))))
+    (unwrap-panic (principal-construct? (get version d) (get hash-bytes d)))
+  )
+)
+
 (define-read-only (is-supply-frozen)
   (ok (var-get supply-frozen))
 )
@@ -244,24 +278,30 @@
   
 (define-public (set-license-uri (uri (string-ascii 80)))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-NOT-AUTHORIZED))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-NOT-AUTHORIZED))
     (ok (var-set license-uri uri))))
     
 (define-public (set-license-name (name (string-ascii 40)))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-NOT-AUTHORIZED))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-NOT-AUTHORIZED))
     (ok (var-set license-name name))))
 
 ;; Non-custodial marketplace extras
 ;; Mainnet trait implementation
  (use-trait commission-trait 'SP3D6PV2ACBPEKYJTCMH7HEN02KP87QSP8KTEH335.commission-trait.commission)
 
-;; Testnet trait implementation
-;; (use-trait commission-trait 'ST30VRDPRK19QWV21JW945ZQK4QYA69TD7F8T2SHH.commission-trait.commission)
-
-
 (define-map token-count principal uint)
 (define-map market uint {price: uint, commission: principal, royalty: uint})
+(define-map whitelisted-market principal bool)
+
+(define-public (whitelist-marketplace (market-contract principal))
+  (begin
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-NOT-AUTHORIZED))
+    (ok (map-set whitelisted-market market-contract true))))
+
+(define-read-only (is-whitelisted (market-contract principal))
+  (default-to false
+    (map-get? whitelisted-market market-contract)))
 
 (define-read-only (get-balance (account principal))
   (default-to u0
@@ -292,6 +332,7 @@
 (define-public (list-in-ustx (id uint) (price uint) (comm-trait <commission-trait>))
   (let ((listing  {price: price, commission: (contract-of comm-trait), royalty: (var-get royalty-percent)}))
     (asserts! (is-sender-owner id) (err ERR-NOT-AUTHORIZED))
+    (asserts! (is-whitelisted (contract-of comm-trait)) (err ERR-NOT-WHITELISTED))
     (asserts! (is-eq (is-active id) true) (err ERR-NOT-ACTIVE))
     (map-set market id listing)
     (print (merge listing {a: "list-in-ustx", id: id}))
@@ -328,14 +369,14 @@
     (print {a: "buy-in-ustx", id: id})
     (ok true)))
     
-(define-data-var royalty-percent uint u100)
+(define-data-var royalty-percent uint u150)
 
 (define-read-only (get-royalty-percent)
   (ok (var-get royalty-percent)))
 
 (define-public (set-royalty-percent (royalty uint))
   (begin
-    (asserts! (or (is-eq tx-sender (var-get protocol-address)) (is-eq tx-sender DEPLOYER)) (err ERR-INVALID-USER))
+    (asserts! (is-eq (get-standard-caller) DEPLOYER) (err ERR-INVALID-USER))
     (asserts! (and (>= royalty u0) (<= royalty u1000)) (err ERR-INVALID-PERCENTAGE))
     (ok (var-set royalty-percent royalty))))
 
@@ -352,7 +393,7 @@
 ;; implementation of bulk functions
 ;; bulk buy/sweep
 
-(define-public (buy-many (maps (list 100 { commission: <commission-trait>, id: uint })))
+(define-public (buy-many (maps (list 200 { commission: <commission-trait>, id: uint })))
   (fold check-err (map buy-single maps) (ok true))
 )
 (define-private (buy-single (maps { commission: <commission-trait>, id: uint }))
@@ -362,7 +403,7 @@
 ))
 
 ;; bulk listing
-(define-public (list-many (maps (list 100 { commission: <commission-trait>, price: uint, id: uint })))
+(define-public (list-many (maps (list 200 { commission: <commission-trait>, price: uint, id: uint })))
   (fold check-err (map list-single maps) (ok true))
 )
 
@@ -373,7 +414,7 @@
 ))
 
 ;; bulk unlist
-(define-public (unlist-many (maps (list 100 { id: uint })))
+(define-public (unlist-many (maps (list 200 { id: uint })))
   (fold check-err (map unlist-single maps) (ok true))
 )
 
@@ -384,7 +425,7 @@
 ))
 
 ;; bulk transfer
-(define-public (transfer-many (maps (list 100 { id: uint, to: principal })))
+(define-public (transfer-many (maps (list 200 { id: uint, to: principal })))
   (fold check-err (map transfer-single maps) (ok true))
 )
 
@@ -393,3 +434,8 @@
 (begin
   (transfer (get id maps) tx-sender (get to maps))
 ))
+
+(begin
+(try! (whitelist-marketplace 'SPNWZ5V2TPWGQGVDR6T7B6RQ4XMGZ4PXTEE0VQ0S.gamma-commission-v1))
+(whitelist-marketplace 'SP31VDBJZTHC476YXZ428R2NBYF3CWV4QJSKDX0ZK.stxmapco-v1-commission)
+)
